@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"go.opencensus.io/trace"
 	"strconv"
 
 	"github.com/gorilla/sessions"
@@ -91,6 +92,8 @@ func fillinAdministrator(next echo.HandlerFunc) echo.HandlerFunc {
 func registerAdminRoutes(e *echo.Echo) {
 	e.GET("/admin/", func(c echo.Context) error {
 		ctx := c.Request().Context()
+		ctx, span := trace.StartSpan(ctx, "registerAdminRoutes")
+		defer span.End()
 		var events []*Event
 		administrator := c.Get("administrator")
 		if administrator != nil {

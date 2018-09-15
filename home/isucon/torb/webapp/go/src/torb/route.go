@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"go.opencensus.io/trace"
 
 	"github.com/labstack/echo"
 )
@@ -38,6 +39,8 @@ func getRoot(c echo.Context) error {
 
 func postActionsLogin(c echo.Context) error {
 	ctx := c.Request().Context()
+	ctx, span := trace.StartSpan(ctx, "postActionsLogin")
+	defer span.End()
 	var params struct {
 		LoginName string `json:"login_name"`
 		Password  string `json:"password"`
