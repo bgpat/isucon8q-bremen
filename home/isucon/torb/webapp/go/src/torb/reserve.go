@@ -2,10 +2,14 @@ package main
 
 import (
 	"database/sql"
-	"go.opencensus.io/trace"
+	"fmt"
 	"log"
+	"math/rand"
+	"sort"
 	"strconv"
 	"time"
+
+	"go.opencensus.io/trace"
 
 	"github.com/labstack/echo"
 )
@@ -24,6 +28,12 @@ type Reservation struct {
 	Price          int64  `json:"price,omitempty"`
 	ReservedAtUnix int64  `json:"reserved_at,omitempty"`
 	CanceledAtUnix int64  `json:"canceled_at,omitempty"`
+}
+
+var reserveIDKey = "rid"
+
+func reserveKey(eventID int64, rank string) string {
+	return fmt.Sprintf("r_%v_%v", eventID, rank)
 }
 
 func postReserve(c echo.Context) error {
@@ -61,11 +71,17 @@ func postReserve(c echo.Context) error {
 	var sheet Sheet
 	var reservationID int64
 	for {
-		if err := db.QueryRowContext(ctx, "SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1", event.ID, params.Rank).Scan(&sheet.ID, &sheet.Rank, &sheet.Num, &sheet.Price); err != nil {
-			if err == sql.ErrNoRows {
-				return resError(c, "sold_out", 409)
-			}
+		s, err := client.HGetAll(reserveKey(event.ID, params.Rank)).Result()
+		if err != nil {
 			return err
+		}
+		if len(s) == int(sheetMap[params.Rank].Num) {
+			return resError(c, "sold_out", 409)
+		}
+
+		sheet = RandSheet(params.Rank, s)
+		if sheet.ID == 0 {
+			return resError(c, "sold_out", 409)
 		}
 
 		tx, err := db.Begin()
@@ -73,13 +89,24 @@ func postReserve(c echo.Context) error {
 			return err
 		}
 
-		res, err := tx.ExecContext(ctx, "INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at) VALUES (?, ?, ?, ?)", event.ID, sheet.ID, user.ID, time.Now().UTC().Format("2006-01-02 15:04:05.000000"))
+		{
+			reservationID, err = client.Incr(reserveIDKey).Result()
+			if err != nil {
+				log.Println("failed to incr:", err)
+			}
+		}
+
+		now := time.Now().UTC()
+		{
+			client.HSet(reserveKey(event.ID, sheet.Rank), strconv.Itoa(int(sheet.Num)), now.Unix())
+		}
+
+		_, err = tx.ExecContext(ctx, "INSERT INTO reservations (id, event_id, sheet_id, user_id, reserved_at) VALUES (?, ?, ?, ?, ?)", reservationID, event.ID, sheet.ID, user.ID, now.Format("2006-01-02 15:04:05.000000"))
 		if err != nil {
 			tx.Rollback()
 			log.Println("re-try: rollback by", err)
 			continue
 		}
-		reservationID, err = res.LastInsertId()
 		if err != nil {
 			tx.Rollback()
 			log.Println("re-try: rollback by", err)
@@ -165,5 +192,56 @@ func deleteReservation(c echo.Context) error {
 		return err
 	}
 
+	if err := client.HDel(reserveKey(event.ID, rank), strconv.Itoa(int(sheet.Num))).Err(); err != nil {
+		return err
+	}
 	return c.NoContent(204)
+}
+
+func Rank(sheetId int64) (string, int64) {
+	if sheetId <= 50 {
+		return "S", sheetId
+	}
+	if sheetId <= 200 {
+		return "A", sheetId - 50
+	}
+	if sheetId <= 500 {
+		return "B", sheetId - 200
+	}
+	return "C", sheetId - 500
+}
+
+/*
+   rank : SABCのどれか
+   s : keyがすでに使われているNumをstringにしたもの
+*/
+func RandSheet(rank string, s map[string]string) Sheet {
+	r := make([]int, 0, sheetMap[rank].Num)
+	q := make([]int64, 0, sheetMap[rank].Num)
+	for k, _ := range s {
+		used, _ := strconv.Atoi(k)
+		r = append(r, used)
+	}
+
+	r = sort.IntSlice(r)
+
+	j := 0
+	for i := int64(1); i <= sheetMap[rank].Num; i++ {
+		if j < len(r) && i == int64(r[j]) {
+			j++
+		} else {
+			q = append(q, i)
+		}
+	}
+	sheet := Sheet{}
+	sheet.Rank = rank
+	sheet.Num = q[rand.Intn(len(q))]
+	sheet.ID = sheet.Num
+	for _, c := range "SABC" {
+		if string(c) == rank {
+			break
+		}
+		sheet.ID += sheetMap[string(c)].Num
+	}
+	return sheet
 }
