@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"strconv"
 
 	"github.com/labstack/echo"
 )
@@ -71,38 +70,4 @@ func postActionsLogin(c echo.Context) error {
 func postActionsLogout(c echo.Context) error {
 	sessDeleteUserID(c)
 	return c.NoContent(204)
-}
-
-func getAPIEvents(c echo.Context) error {
-	events, err := getEvents(true)
-	if err != nil {
-		return err
-	}
-	for i, v := range events {
-		events[i] = sanitizeEvent(v)
-	}
-	return c.JSON(200, events)
-}
-
-func getAPIEvent(c echo.Context) error {
-	eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		return resError(c, "not_found", 404)
-	}
-
-	loginUserID := int64(-1)
-	if user, err := getLoginUser(c); err == nil {
-		loginUserID = user.ID
-	}
-
-	event, err := getEvent(eventID, loginUserID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return resError(c, "not_found", 404)
-		}
-		return err
-	} else if !event.PublicFg {
-		return resError(c, "not_found", 404)
-	}
-	return c.JSON(200, sanitizeEvent(event))
 }
