@@ -29,7 +29,7 @@ func getInitialize(c echo.Context) error {
 			r := Reservation{}
 			rows.Scan(&r.ID, &r.EventID, &r.SheetID, &r.ReservedAt)
 			rank, num := Rank(r.SheetID)
-			client.HSet(reserveKey(r.EventID, rank), strconv.Itoa(int(num)), r.ReservedAtUnix)
+			client.HSet(reserveKey(r.EventID, rank), strconv.Itoa(int(num)), r.ReservedAt.Unix())
 			if id < r.ID {
 				id = r.ID
 			}

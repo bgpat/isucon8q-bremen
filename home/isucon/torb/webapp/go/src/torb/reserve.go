@@ -226,8 +226,8 @@ func RandSheet(rank string, s map[string]string) Sheet {
 	r = sort.IntSlice(r)
 
 	j := 0
-	for i := int64(1); j < len(r) && i <= sheetMap[rank].Num; i++ {
-		if i == int64(r[j]) {
+	for i := int64(1); i <= sheetMap[rank].Num; i++ {
+		if j < len(r) && i == int64(r[j]) {
 			j++
 		} else {
 			q = append(q, i)
@@ -235,10 +235,13 @@ func RandSheet(rank string, s map[string]string) Sheet {
 	}
 	sheet := Sheet{}
 	sheet.Rank = rank
-	if len(q) == 0 {
-		return Sheet{}
-	}
 	sheet.Num = q[rand.Intn(len(q))]
-	sheet.ID = sheetMap[rank].Num + sheet.Num
+	sheet.ID = sheet.Num
+	for _, c := range "SABC" {
+		if string(c) == rank {
+			break
+		}
+		sheet.ID += sheetMap[string(c)].Num
+	}
 	return sheet
 }
