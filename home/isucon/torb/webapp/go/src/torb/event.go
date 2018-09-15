@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"database/sql"
-	"go.opencensus.io/trace"
 	"strconv"
+
+	"go.opencensus.io/trace"
 
 	"github.com/labstack/echo"
 )
@@ -19,6 +20,32 @@ type Event struct {
 	Total   int                `json:"total"`
 	Remains int                `json:"remains"`
 	Sheets  map[string]*Sheets `json:"sheets,omitempty"`
+}
+
+func getEventsRootAdmin(ctx context.Context) ([]*Event, error) {
+	rows1, err := db.QueryContext(ctx, "SELECT id, title, price FROM events ORDER BY id ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows1.Close()
+
+	memo := *CreateRemains(ctx)
+
+	var events []*Event
+	for rows1.Next() {
+		var event Event
+
+		if err := rows1.Scan(&event.ID, &event.Title, &event.Price); err != nil {
+			return nil, err
+		}
+
+		event.Sheets = CreateSheets(event, memo)
+		event.Total = 1000
+		event.Remains = 1000 - memo[event.ID][4]
+
+		events = append(events, &event)
+	}
+	return events, nil
 }
 
 func getEventsRoot(ctx context.Context) ([]*Event, error) {

@@ -3,8 +3,9 @@ package main
 import (
 	"database/sql"
 	"errors"
-	"go.opencensus.io/trace"
 	"strconv"
+
+	"go.opencensus.io/trace"
 
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo"
@@ -98,7 +99,7 @@ func registerAdminRoutes(e *echo.Echo) {
 		administrator := c.Get("administrator")
 		if administrator != nil {
 			var err error
-			if events, err = getEvents(ctx, true); err != nil {
+			if events, err = getEventsRootAdmin(ctx); err != nil {
 				return err
 			}
 		}
