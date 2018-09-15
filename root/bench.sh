@@ -6,3 +6,8 @@ mysqldumpslow -s t /var/log/mariadb/mariadb-slow.log | slackcat --filename "slow
 cp /var/log/mariadb/mariadb-slow.log /var/log/mariadb/mariadb-slow.log.old
 rm /var/log/mariadb/mariadb-slow.log
 systemctl restart mariadb
+
+cat /var/log/nginx/kataribe.log | kataribe | slackcat
+cp /var/log/nginx/kataribe.log /var/log/nginx/kataribe.log.old
+rm -f /var/log/nginx/kataribe.log
+systemctl restart nginx
