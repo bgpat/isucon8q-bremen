@@ -11,7 +11,7 @@ deps:
 
 .PHONY: build
 build:
-	GOPATH=`pwd`:`pwd`/vendor go build -v torb
+	GOOS=linux GOPATH=`pwd`:`pwd`/vendor go build -v torb
 
 .PHONY: deploy
 deploy:
