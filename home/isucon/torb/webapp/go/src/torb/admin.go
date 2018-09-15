@@ -88,11 +88,12 @@ func fillinAdministrator(next echo.HandlerFunc) echo.HandlerFunc {
 
 func registerAdminRoutes(e *echo.Echo) {
 	e.GET("/admin/", func(c echo.Context) error {
+		ctx := c.Request().Context()
 		var events []*Event
 		administrator := c.Get("administrator")
 		if administrator != nil {
 			var err error
-			if events, err = getEvents(true); err != nil {
+			if events, err = getEvents(ctx, true); err != nil {
 				return err
 			}
 		}
@@ -138,13 +139,15 @@ func registerAdminRoutes(e *echo.Echo) {
 		return c.NoContent(204)
 	}, adminLoginRequired)
 	e.GET("/admin/api/events", func(c echo.Context) error {
-		events, err := getEvents(true)
+		ctx := c.Request().Context()
+		events, err := getEvents(ctx, true)
 		if err != nil {
 			return err
 		}
 		return c.JSON(200, events)
 	}, adminLoginRequired)
 	e.POST("/admin/api/events", func(c echo.Context) error {
+		ctx := c.Request().Context()
 		var params struct {
 			Title  string `json:"title"`
 			Public bool   `json:"public"`
@@ -171,18 +174,19 @@ func registerAdminRoutes(e *echo.Echo) {
 			return err
 		}
 
-		event, err := getEvent(eventID, -1)
+		event, err := getEvent(ctx, eventID, -1)
 		if err != nil {
 			return err
 		}
 		return c.JSON(200, event)
 	}, adminLoginRequired)
 	e.GET("/admin/api/events/:id", func(c echo.Context) error {
+		ctx := c.Request().Context()
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
 		}
-		event, err := getEvent(eventID, -1)
+		event, err := getEvent(ctx, eventID, -1)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "not_found", 404)
@@ -192,6 +196,7 @@ func registerAdminRoutes(e *echo.Echo) {
 		return c.JSON(200, event)
 	}, adminLoginRequired)
 	e.POST("/admin/api/events/:id/actions/edit", func(c echo.Context) error {
+		ctx := c.Request().Context()
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
@@ -206,7 +211,7 @@ func registerAdminRoutes(e *echo.Echo) {
 			params.Public = false
 		}
 
-		event, err := getEvent(eventID, -1)
+		event, err := getEvent(ctx, eventID, -1)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "not_found", 404)
@@ -232,7 +237,7 @@ func registerAdminRoutes(e *echo.Echo) {
 			return err
 		}
 
-		e, err := getEvent(eventID, -1)
+		e, err := getEvent(ctx, eventID, -1)
 		if err != nil {
 			return err
 		}
@@ -240,12 +245,13 @@ func registerAdminRoutes(e *echo.Echo) {
 		return nil
 	}, adminLoginRequired)
 	e.GET("/admin/api/reports/events/:id/sales", func(c echo.Context) error {
+		ctx := c.Request().Context()
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
 		}
 
-		event, err := getEvent(eventID, -1)
+		event, err := getEvent(ctx, eventID, -1)
 		if err != nil {
 			return err
 		}

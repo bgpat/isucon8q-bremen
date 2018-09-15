@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"strconv"
 
@@ -77,7 +78,7 @@ func getEventsRoot() ([]*Event, error) {
 	return events, nil
 }
 
-func getEvents(all bool) ([]*Event, error) {
+func getEvents(ctx context.Context, all bool) ([]*Event, error) {
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, err
@@ -102,7 +103,7 @@ func getEvents(all bool) ([]*Event, error) {
 		events = append(events, &event)
 	}
 	for i, v := range events {
-		event, err := getEvent(v.ID, -1)
+		event, err := getEvent(ctx, v.ID, -1)
 		if err != nil {
 			return nil, err
 		}
@@ -114,9 +115,9 @@ func getEvents(all bool) ([]*Event, error) {
 	return events, nil
 }
 
-func getEvent(eventID, loginUserID int64) (*Event, error) {
+func getEvent(ctx context.Context, eventID, loginUserID int64) (*Event, error) {
 	var event Event
-	if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&event.ID, &event.Title, &event.PublicFg, &event.ClosedFg, &event.Price); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&event.ID, &event.Title, &event.PublicFg, &event.ClosedFg, &event.Price); err != nil {
 		return nil, err
 	}
 	event.Sheets = map[string]*Sheets{
@@ -126,7 +127,7 @@ func getEvent(eventID, loginUserID int64) (*Event, error) {
 		"C": &Sheets{},
 	}
 
-	rows, err := db.Query("SELECT * FROM sheets ORDER BY `rank`, num")
+	rows, err := db.QueryContext(ctx, "SELECT * FROM sheets ORDER BY `rank`, num")
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +143,7 @@ func getEvent(eventID, loginUserID int64) (*Event, error) {
 		event.Sheets[sheet.Rank].Total++
 
 		var reservation Reservation
-		err := db.QueryRow("SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", event.ID, sheet.ID).Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt)
+		err := db.QueryRowContext(ctx, "SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", event.ID, sheet.ID).Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt)
 		if err == nil {
 			sheet.Mine = reservation.UserID == loginUserID
 			sheet.Reserved = true
@@ -172,6 +173,7 @@ func getAPIEvents(c echo.Context) error {
 }
 
 func getAPIEvent(c echo.Context) error {
+	ctx := c.Request().Context()
 	eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resError(c, "not_found", 404)
@@ -182,7 +184,7 @@ func getAPIEvent(c echo.Context) error {
 		loginUserID = user.ID
 	}
 
-	event, err := getEvent(eventID, loginUserID)
+	event, err := getEvent(ctx, eventID, loginUserID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return resError(c, "not_found", 404)
