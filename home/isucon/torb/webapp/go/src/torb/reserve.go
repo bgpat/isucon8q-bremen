@@ -29,8 +29,8 @@ type Reservation struct {
 
 var reserveIDKey = "rid"
 
-func reserveKey(eventID int64, rank string, num int64) string {
-	return fmt.Sprintf("r_%v_%v_%v", eventID, rank, num)
+func reserveKey(eventID int64, rank string) string {
+	return fmt.Sprintf("r_%v_%v", eventID, rank)
 }
 
 func postReserve(c echo.Context) error {
@@ -68,6 +68,14 @@ func postReserve(c echo.Context) error {
 	var sheet Sheet
 	var reservationID int64
 	for {
+		s, err := client.HGetAll(reserveKey(event.ID, params.Rank)).Result()
+		if err != nil {
+			return err
+		}
+		if sheetMap[params.Rank].Num-int64(len(s)) == 0 {
+			return resError(c, "sold_out", 409)
+		}
+
 		if err := db.QueryRowContext(ctx, "SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1", event.ID, params.Rank).Scan(&sheet.ID, &sheet.Rank, &sheet.Num, &sheet.Price); err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "sold_out", 409)
@@ -89,7 +97,7 @@ func postReserve(c echo.Context) error {
 
 		now := time.Now().UTC()
 		{
-			client.Set(reserveKey(event.ID, sheet.Rank, sheet.Num), now.Unix(), 0)
+			client.HSet(reserveKey(event.ID, sheet.Rank), strconv.Itoa(int(sheet.Num)), now.Unix())
 		}
 
 		_, err = tx.ExecContext(ctx, "INSERT INTO reservations (id, event_id, sheet_id, user_id, reserved_at) VALUES (?, ?, ?, ?, ?)", reservationID, event.ID, sheet.ID, user.ID, now.Format("2006-01-02 15:04:05.000000"))
@@ -183,7 +191,7 @@ func deleteReservation(c echo.Context) error {
 		return err
 	}
 
-	if err := client.Del(reserveKey(event.ID, rank, sheet.Num)).Err(); err != nil {
+	if err := client.HDel(reserveKey(event.ID, rank), strconv.Itoa(int(sheet.Num))).Err(); err != nil {
 		return err
 	}
 	return c.NoContent(204)

@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 
 	"github.com/labstack/echo"
 )
@@ -27,7 +28,7 @@ func getInitialize(c echo.Context) error {
 			r := Reservation{}
 			rows.Scan(&r.ID, &r.EventID, &r.SheetID, &r.ReservedAt)
 			rank, num := Rank(r.SheetID)
-			client.Set(reserveKey(r.EventID, rank, num), r.ReservedAtUnix, 0)
+			client.HSet(reserveKey(r.EventID, rank), strconv.Itoa(int(num)), r.ReservedAtUnix)
 			if id < r.ID {
 				id = r.ID
 			}
