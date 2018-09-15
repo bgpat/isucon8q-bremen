@@ -62,8 +62,8 @@ regexp = '^GET /api/events/.+'
 name = "get /api/events/:id"
 
 [[bundle]]
-regexp = '^GET /api/events/11/sheets/.+/reservation'
-name = "get /api/events/11/sheets/:rank/:id/reservation"
+regexp = '^GET /api/events/[0-9]+/sheets/.+/reservation'
+name = "get /api/events/:event_id/sheets/:rank/:id/reservation"
 
 [[bundle]]
 regexp = '^GET /admin/api/events/.+'
