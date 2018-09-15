@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/bgpat/ocsql"
+	"github.com/go-redis/redis"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo"
@@ -55,7 +56,10 @@ func (r *Renderer) Render(w io.Writer, name string, data interface{}, c echo.Con
 	return r.templates.ExecuteTemplate(w, name, data)
 }
 
-var db *sql.DB
+var (
+	db     *sql.DB
+	client *redis.Client
+)
 
 func main() {
 	exporter, err := jaeger.NewExporter(jaeger.Options{
@@ -84,6 +88,14 @@ func main() {
 		log.Fatalf("unable to register our ocsql driver: %v\n", err)
 	}
 	db, err = sql.Open(driverName, dsn)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	client = redis.NewClient(&redis.Options{
+		Addr: "localhost:6379",
+	})
+	pong, err := client.Ping().Result()
 	if err != nil {
 		log.Fatal(err)
 	}
