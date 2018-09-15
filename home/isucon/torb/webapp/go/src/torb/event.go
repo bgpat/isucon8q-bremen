@@ -20,13 +20,7 @@ type Event struct {
 }
 
 func getEventsRoot(all bool) ([]*Event, error) {
-	tx, err := db.Begin()
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Commit()
-
-	rows1, err := tx.Query("SELECT id, title, price FROM events WHERE public_fg = 1 ORDER BY id ASC")
+	rows1, err := db.Query("SELECT id, title, price FROM events WHERE public_fg = 1 ORDER BY id ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +35,7 @@ func getEventsRoot(all bool) ([]*Event, error) {
 		[]int{500, 1000},
 	} {
 
-		rows, err := tx.Query("SELECT event_id, count(1) FROM reservations WHERE ? < sheet_id AND sheet_id <= ? AND canceled_at IS NULL GROUP BY event_id", v[0], v[1])
+		rows, err := db.Query("SELECT event_id, count(1) FROM reservations WHERE ? < sheet_id AND sheet_id <= ? AND canceled_at IS NULL GROUP BY event_id", v[0], v[1])
 		if err != nil {
 			return nil, err
 		}
