@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/bgpat/ocsql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo"
@@ -75,7 +76,14 @@ func main() {
 		os.Getenv("DB_DATABASE"),
 	)
 
-	db, err = sql.Open("mysql", dsn)
+	driverName, err := ocsql.Register("mysql", ocsql.WithOptions(ocsql.TraceOptions{
+		Query:       true,
+		QueryParams: true,
+	}))
+	if err != nil {
+		log.Fatalf("unable to register our ocsql driver: %v\n", err)
+	}
+	db, err = sql.Open(driverName, dsn)
 	if err != nil {
 		log.Fatal(err)
 	}

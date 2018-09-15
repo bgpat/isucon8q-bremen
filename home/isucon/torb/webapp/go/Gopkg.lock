@@ -9,6 +9,12 @@
   source = "github.com/apache/thrift"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/bgpat/ocsql"
+  packages = ["."]
+  revision = "1b1c0827cbf16fafa843d18bc34fbea30507675a"
+
+[[projects]]
   name = "github.com/dgrijalva/jwt-go"
   packages = ["."]
   revision = "06ea1031745cb8b3dab3f6a236daf2b0aa468b7e"
@@ -151,6 +157,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "ac1e3c59321cf810abeb1cb109da586f60565615998951ba6934d203be900671"
+  inputs-digest = "5149ac2ba023f6586137630d3a7fe5da1a358e2ff4cbef0b6287366720d69e1a"
   solver-name = "gps-cdcl"
   solver-version = 1
