@@ -56,6 +56,7 @@ func loginRequired(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 func postAPIUsers(c echo.Context) error {
+	ctx := c.Request().Context()
 	var params struct {
 		Nickname  string `json:"nickname"`
 		LoginName string `json:"login_name"`
@@ -69,7 +70,7 @@ func postAPIUsers(c echo.Context) error {
 	}
 
 	var user User
-	if err := tx.QueryRow("SELECT * FROM users WHERE login_name = ?", params.LoginName).Scan(&user.ID, &user.LoginName, &user.Nickname, &user.PassHash); err != sql.ErrNoRows {
+	if err := tx.QueryRowContext(ctx, "SELECT * FROM users WHERE login_name = ?", params.LoginName).Scan(&user.ID, &user.LoginName, &user.Nickname, &user.PassHash); err != sql.ErrNoRows {
 		tx.Rollback()
 		if err == nil {
 			return resError(c, "duplicated", 409)
@@ -77,7 +78,7 @@ func postAPIUsers(c echo.Context) error {
 		return err
 	}
 
-	res, err := tx.Exec("INSERT INTO users (login_name, pass_hash, nickname) VALUES (?, SHA2(?, 256), ?)", params.LoginName, params.Password, params.Nickname)
+	res, err := tx.ExecContext(ctx, "INSERT INTO users (login_name, pass_hash, nickname) VALUES (?, SHA2(?, 256), ?)", params.LoginName, params.Password, params.Nickname)
 	if err != nil {
 		tx.Rollback()
 		return resError(c, "", 0)
@@ -99,7 +100,8 @@ func postAPIUsers(c echo.Context) error {
 
 func getAPIUser(c echo.Context) error {
 	var user User
-	if err := db.QueryRow("SELECT id, nickname FROM users WHERE id = ?", c.Param("id")).Scan(&user.ID, &user.Nickname); err != nil {
+	ctx := c.Request().Context()
+	if err := db.QueryRowContext(ctx, "SELECT id, nickname FROM users WHERE id = ?", c.Param("id")).Scan(&user.ID, &user.Nickname); err != nil {
 		return err
 	}
 
@@ -111,7 +113,7 @@ func getAPIUser(c echo.Context) error {
 		return resError(c, "forbidden", 403)
 	}
 
-	rows, err := db.Query("SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id WHERE r.user_id = ? ORDER BY IFNULL(r.canceled_at, r.reserved_at) DESC LIMIT 5", user.ID)
+	rows, err := db.QueryContext(ctx, "SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id WHERE r.user_id = ? ORDER BY IFNULL(r.canceled_at, r.reserved_at) DESC LIMIT 5", user.ID)
 	if err != nil {
 		return err
 	}
@@ -125,7 +127,7 @@ func getAPIUser(c echo.Context) error {
 			return err
 		}
 
-		event, err := getEvent(reservation.EventID, -1)
+		event, err := getEvent(ctx, reservation.EventID, -1)
 		if err != nil {
 			return err
 		}
@@ -149,11 +151,11 @@ func getAPIUser(c echo.Context) error {
 	}
 
 	var totalPrice int
-	if err := db.QueryRow("SELECT IFNULL(SUM(e.price + s.price), 0) FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.canceled_at IS NULL", user.ID).Scan(&totalPrice); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT IFNULL(SUM(e.price + s.price), 0) FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.user_id = ? AND r.canceled_at IS NULL", user.ID).Scan(&totalPrice); err != nil {
 		return err
 	}
 
-	rows, err = db.Query("SELECT event_id FROM reservations WHERE user_id = ? GROUP BY event_id ORDER BY MAX(IFNULL(canceled_at, reserved_at)) DESC LIMIT 5", user.ID)
+	rows, err = db.QueryContext(ctx, "SELECT event_id FROM reservations WHERE user_id = ? GROUP BY event_id ORDER BY MAX(IFNULL(canceled_at, reserved_at)) DESC LIMIT 5", user.ID)
 	if err != nil {
 		return err
 	}
@@ -165,8 +167,7 @@ func getAPIUser(c echo.Context) error {
 		if err := rows.Scan(&eventID); err != nil {
 			return err
 		}
-		//event, err := getEvent(eventID, -1)
-		event, err := getEventLightSheets(eventID, -1)
+		event, err := getEventLightSheets(ctx, eventID, -1)
 		if err != nil {
 			return err
 		}

@@ -58,22 +58,24 @@ func adminLoginRequired(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 func getLoginUser(c echo.Context) (*User, error) {
+	ctx := c.Request().Context()
 	userID := sessUserID(c)
 	if userID == 0 {
 		return nil, errors.New("not logged in")
 	}
 	var user User
-	err := db.QueryRow("SELECT id, nickname FROM users WHERE id = ?", userID).Scan(&user.ID, &user.Nickname)
+	err := db.QueryRowContext(ctx, "SELECT id, nickname FROM users WHERE id = ?", userID).Scan(&user.ID, &user.Nickname)
 	return &user, err
 }
 
 func getLoginAdministrator(c echo.Context) (*Administrator, error) {
+	ctx := c.Request().Context()
 	administratorID := sessAdministratorID(c)
 	if administratorID == 0 {
 		return nil, errors.New("not logged in")
 	}
 	var administrator Administrator
-	err := db.QueryRow("SELECT id, nickname FROM administrators WHERE id = ?", administratorID).Scan(&administrator.ID, &administrator.Nickname)
+	err := db.QueryRowContext(ctx, "SELECT id, nickname FROM administrators WHERE id = ?", administratorID).Scan(&administrator.ID, &administrator.Nickname)
 	return &administrator, err
 }
 
@@ -88,11 +90,12 @@ func fillinAdministrator(next echo.HandlerFunc) echo.HandlerFunc {
 
 func registerAdminRoutes(e *echo.Echo) {
 	e.GET("/admin/", func(c echo.Context) error {
+		ctx := c.Request().Context()
 		var events []*Event
 		administrator := c.Get("administrator")
 		if administrator != nil {
 			var err error
-			if events, err = getEvents(true); err != nil {
+			if events, err = getEvents(ctx, true); err != nil {
 				return err
 			}
 		}
@@ -103,6 +106,7 @@ func registerAdminRoutes(e *echo.Echo) {
 		})
 	}, fillinAdministrator)
 	e.POST("/admin/api/actions/login", func(c echo.Context) error {
+		ctx := c.Request().Context()
 		var params struct {
 			LoginName string `json:"login_name"`
 			Password  string `json:"password"`
@@ -110,7 +114,7 @@ func registerAdminRoutes(e *echo.Echo) {
 		c.Bind(&params)
 
 		administrator := new(Administrator)
-		if err := db.QueryRow("SELECT * FROM administrators WHERE login_name = ?", params.LoginName).Scan(&administrator.ID, &administrator.LoginName, &administrator.Nickname, &administrator.PassHash); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT * FROM administrators WHERE login_name = ?", params.LoginName).Scan(&administrator.ID, &administrator.LoginName, &administrator.Nickname, &administrator.PassHash); err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "authentication_failed", 401)
 			}
@@ -118,7 +122,7 @@ func registerAdminRoutes(e *echo.Echo) {
 		}
 
 		var passHash string
-		if err := db.QueryRow("SELECT SHA2(?, 256)", params.Password).Scan(&passHash); err != nil {
+		if err := db.QueryRowContext(ctx, "SELECT SHA2(?, 256)", params.Password).Scan(&passHash); err != nil {
 			return err
 		}
 		if administrator.PassHash != passHash {
@@ -138,13 +142,15 @@ func registerAdminRoutes(e *echo.Echo) {
 		return c.NoContent(204)
 	}, adminLoginRequired)
 	e.GET("/admin/api/events", func(c echo.Context) error {
-		events, err := getEvents(true)
+		ctx := c.Request().Context()
+		events, err := getEvents(ctx, true)
 		if err != nil {
 			return err
 		}
 		return c.JSON(200, events)
 	}, adminLoginRequired)
 	e.POST("/admin/api/events", func(c echo.Context) error {
+		ctx := c.Request().Context()
 		var params struct {
 			Title  string `json:"title"`
 			Public bool   `json:"public"`
@@ -157,7 +163,7 @@ func registerAdminRoutes(e *echo.Echo) {
 			return err
 		}
 
-		res, err := tx.Exec("INSERT INTO events (title, public_fg, closed_fg, price) VALUES (?, ?, 0, ?)", params.Title, params.Public, params.Price)
+		res, err := tx.ExecContext(ctx, "INSERT INTO events (title, public_fg, closed_fg, price) VALUES (?, ?, 0, ?)", params.Title, params.Public, params.Price)
 		if err != nil {
 			tx.Rollback()
 			return err
@@ -171,18 +177,19 @@ func registerAdminRoutes(e *echo.Echo) {
 			return err
 		}
 
-		event, err := getEvent(eventID, -1)
+		event, err := getEvent(ctx, eventID, -1)
 		if err != nil {
 			return err
 		}
 		return c.JSON(200, event)
 	}, adminLoginRequired)
 	e.GET("/admin/api/events/:id", func(c echo.Context) error {
+		ctx := c.Request().Context()
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
 		}
-		event, err := getEvent(eventID, -1)
+		event, err := getEvent(ctx, eventID, -1)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "not_found", 404)
@@ -192,6 +199,7 @@ func registerAdminRoutes(e *echo.Echo) {
 		return c.JSON(200, event)
 	}, adminLoginRequired)
 	e.POST("/admin/api/events/:id/actions/edit", func(c echo.Context) error {
+		ctx := c.Request().Context()
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
@@ -206,7 +214,7 @@ func registerAdminRoutes(e *echo.Echo) {
 			params.Public = false
 		}
 
-		event, err := getEvent(eventID, -1)
+		event, err := getEvent(ctx, eventID, -1)
 		if err != nil {
 			if err == sql.ErrNoRows {
 				return resError(c, "not_found", 404)
@@ -224,7 +232,7 @@ func registerAdminRoutes(e *echo.Echo) {
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec("UPDATE events SET public_fg = ?, closed_fg = ? WHERE id = ?", params.Public, params.Closed, event.ID); err != nil {
+		if _, err := tx.ExecContext(ctx, "UPDATE events SET public_fg = ?, closed_fg = ? WHERE id = ?", params.Public, params.Closed, event.ID); err != nil {
 			tx.Rollback()
 			return err
 		}
@@ -232,7 +240,7 @@ func registerAdminRoutes(e *echo.Echo) {
 			return err
 		}
 
-		e, err := getEvent(eventID, -1)
+		e, err := getEvent(ctx, eventID, -1)
 		if err != nil {
 			return err
 		}
@@ -240,17 +248,18 @@ func registerAdminRoutes(e *echo.Echo) {
 		return nil
 	}, adminLoginRequired)
 	e.GET("/admin/api/reports/events/:id/sales", func(c echo.Context) error {
+		ctx := c.Request().Context()
 		eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
 			return resError(c, "not_found", 404)
 		}
 
-		event, err := getEvent(eventID, -1)
+		event, err := getEvent(ctx, eventID, -1)
 		if err != nil {
 			return err
 		}
 
-		rows, err := db.Query("SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price, e.price AS event_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.event_id = ? ORDER BY reserved_at ASC FOR UPDATE", event.ID)
+		rows, err := db.QueryContext(ctx, "SELECT r.*, s.rank AS sheet_rank, s.num AS sheet_num, s.price AS sheet_price, e.price AS event_price FROM reservations r INNER JOIN sheets s ON s.id = r.sheet_id INNER JOIN events e ON e.id = r.event_id WHERE r.event_id = ? ORDER BY reserved_at ASC FOR UPDATE", event.ID)
 		if err != nil {
 			return err
 		}
@@ -280,7 +289,8 @@ func registerAdminRoutes(e *echo.Echo) {
 		return renderReportCSV(c, reports)
 	}, adminLoginRequired)
 	e.GET("/admin/api/reports/sales", func(c echo.Context) error {
-		rows, err := db.Query("select r.*, s.rank as sheet_rank, s.num as sheet_num, s.price as sheet_price, e.id as event_id, e.price as event_price from reservations r inner join sheets s on s.id = r.sheet_id inner join events e on e.id = r.event_id order by reserved_at asc for update")
+		ctx := c.Request().Context()
+		rows, err := db.QueryContext(ctx, "select r.*, s.rank as sheet_rank, s.num as sheet_num, s.price as sheet_price, e.id as event_id, e.price as event_price from reservations r inner join sheets s on s.id = r.sheet_id inner join events e on e.id = r.event_id order by reserved_at asc for update")
 		if err != nil {
 			return err
 		}

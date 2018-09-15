@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"strconv"
 
@@ -19,14 +20,14 @@ type Event struct {
 	Sheets  map[string]*Sheets `json:"sheets,omitempty"`
 }
 
-func getEventsRoot() ([]*Event, error) {
-	rows1, err := db.Query("SELECT id, title, price FROM events WHERE public_fg = 1 ORDER BY id ASC")
+func getEventsRoot(ctx context.Context) ([]*Event, error) {
+	rows1, err := db.QueryContext(ctx, "SELECT id, title, price FROM events WHERE public_fg = 1 ORDER BY id ASC")
 	if err != nil {
 		return nil, err
 	}
 	defer rows1.Close()
 
-	memo := *CreateRemains()
+	memo := *CreateRemains(ctx)
 
 	var events []*Event
 	for rows1.Next() {
@@ -54,7 +55,7 @@ func CreateSheets(event Event, memo map[int64]map[int]int) map[string]*Sheets {
 	}
 }
 
-func CreateRemains() *map[int64]map[int]int {
+func CreateRemains(ctx context.Context) *map[int64]map[int]int {
 	memo := make(map[int64]map[int]int)
 
 	for i, v := range [][]int{
@@ -64,7 +65,7 @@ func CreateRemains() *map[int64]map[int]int {
 		[]int{500, 1000},
 	} {
 
-		rows, err := db.Query("SELECT event_id, count(1) FROM reservations WHERE ? < sheet_id AND sheet_id <= ? AND canceled_at IS NULL GROUP BY event_id", v[0], v[1])
+		rows, err := db.QueryContext(ctx, "SELECT event_id, count(1) FROM reservations WHERE ? < sheet_id AND sheet_id <= ? AND canceled_at IS NULL GROUP BY event_id", v[0], v[1])
 		if err != nil {
 			return nil
 		}
@@ -86,14 +87,14 @@ func CreateRemains() *map[int64]map[int]int {
 	return &memo
 }
 
-func getEvents(all bool) ([]*Event, error) {
+func getEvents(ctx context.Context, all bool) ([]*Event, error) {
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Commit()
 
-	rows, err := tx.Query("SELECT * FROM events ORDER BY id ASC")
+	rows, err := tx.QueryContext(ctx, "SELECT * FROM events ORDER BY id ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +112,7 @@ func getEvents(all bool) ([]*Event, error) {
 		events = append(events, &event)
 	}
 	for i, v := range events {
-		event, err := getEvent(v.ID, -1)
+		event, err := getEvent(ctx, v.ID, -1)
 		if err != nil {
 			return nil, err
 		}
@@ -123,12 +124,12 @@ func getEvents(all bool) ([]*Event, error) {
 	return events, nil
 }
 
-func getEventLightSheets(eventID, loginUserID int64) (*Event, error) {
+func getEventLightSheets(ctx context.Context, eventID, loginUserID int64) (*Event, error) {
 	var event Event
-	if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&event.ID, &event.Title, &event.PublicFg, &event.ClosedFg, &event.Price); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&event.ID, &event.Title, &event.PublicFg, &event.ClosedFg, &event.Price); err != nil {
 		return nil, err
 	}
-	memo := *CreateRemains()
+	memo := *CreateRemains(ctx)
 	event.Sheets = CreateSheets(event, memo)
 	event.Total = 1000
 	event.Remains = 1000 - memo[event.ID][4]
@@ -136,9 +137,9 @@ func getEventLightSheets(eventID, loginUserID int64) (*Event, error) {
 	return &event, nil
 }
 
-func getEvent(eventID, loginUserID int64) (*Event, error) {
+func getEvent(ctx context.Context, eventID, loginUserID int64) (*Event, error) {
 	var event Event
-	if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&event.ID, &event.Title, &event.PublicFg, &event.ClosedFg, &event.Price); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT * FROM events WHERE id = ?", eventID).Scan(&event.ID, &event.Title, &event.PublicFg, &event.ClosedFg, &event.Price); err != nil {
 		return nil, err
 	}
 	event.Sheets = map[string]*Sheets{
@@ -148,7 +149,7 @@ func getEvent(eventID, loginUserID int64) (*Event, error) {
 		"C": &Sheets{},
 	}
 
-	rows, err := db.Query("SELECT * FROM sheets ORDER BY `rank`, num")
+	rows, err := db.QueryContext(ctx, "SELECT * FROM sheets ORDER BY `rank`, num")
 	if err != nil {
 		return nil, err
 	}
@@ -164,7 +165,7 @@ func getEvent(eventID, loginUserID int64) (*Event, error) {
 		event.Sheets[sheet.Rank].Total++
 
 		var reservation Reservation
-		err := db.QueryRow("SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", event.ID, sheet.ID).Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt)
+		err := db.QueryRowContext(ctx, "SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", event.ID, sheet.ID).Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt)
 		if err == nil {
 			sheet.Mine = reservation.UserID == loginUserID
 			sheet.Reserved = true
@@ -183,7 +184,8 @@ func getEvent(eventID, loginUserID int64) (*Event, error) {
 }
 
 func getAPIEvents(c echo.Context) error {
-	events, err := getEventsRoot()
+	ctx := c.Request().Context()
+	events, err := getEventsRoot(ctx)
 	if err != nil {
 		return err
 	}
@@ -194,6 +196,7 @@ func getAPIEvents(c echo.Context) error {
 }
 
 func getAPIEvent(c echo.Context) error {
+	ctx := c.Request().Context()
 	eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resError(c, "not_found", 404)
@@ -204,7 +207,7 @@ func getAPIEvent(c echo.Context) error {
 		loginUserID = user.ID
 	}
 
-	event, err := getEvent(eventID, loginUserID)
+	event, err := getEvent(ctx, eventID, loginUserID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return resError(c, "not_found", 404)
