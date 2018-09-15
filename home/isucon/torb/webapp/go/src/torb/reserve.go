@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"go.opencensus.io/trace"
 	"log"
 	"strconv"
 	"time"
@@ -27,6 +28,8 @@ type Reservation struct {
 
 func postReserve(c echo.Context) error {
 	ctx := c.Request().Context()
+	ctx, span := trace.StartSpan(ctx, "postReserve")
+	defer span.End()
 	eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resError(c, "not_found", 404)
@@ -99,6 +102,8 @@ func postReserve(c echo.Context) error {
 
 func deleteReservation(c echo.Context) error {
 	ctx := c.Request().Context()
+	ctx, span := trace.StartSpan(ctx, "deleteReservation")
+	defer span.End()
 	eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resError(c, "not_found", 404)

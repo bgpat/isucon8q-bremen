@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"go.opencensus.io/trace"
 	"strconv"
 
 	"github.com/labstack/echo"
@@ -88,6 +89,8 @@ func CreateRemains(ctx context.Context) *map[int64]map[int]int {
 }
 
 func getEvents(ctx context.Context, all bool) ([]*Event, error) {
+	ctx, span := trace.StartSpan(ctx, "getEvents")
+	defer span.End()
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, err
@@ -197,6 +200,8 @@ func getAPIEvents(c echo.Context) error {
 
 func getAPIEvent(c echo.Context) error {
 	ctx := c.Request().Context()
+	ctx, span := trace.StartSpan(ctx, "getAPIEvent")
+	defer span.End()
 	eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resError(c, "not_found", 404)
