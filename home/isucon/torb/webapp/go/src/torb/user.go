@@ -125,7 +125,7 @@ func getAPIUser(c echo.Context) error {
 			return err
 		}
 
-		event, err := getEvent(reservation.EventID, -1)
+		event, err := getEventLightSheets(reservation.EventID, -1)
 		if err != nil {
 			return err
 		}
