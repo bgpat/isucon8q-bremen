@@ -70,56 +70,39 @@ func postReserve(c echo.Context) error {
 
 	var sheet Sheet
 	var reservationID int64
-	for {
-		s, err := client.HGetAll(reserveKey(event.ID, params.Rank)).Result()
-		if err != nil {
-			return err
-		}
-		if len(s) == int(sheetMap[params.Rank].Num) {
-			return resError(c, "sold_out", 409)
-		}
-
-		sheet = RandSheet(params.Rank, s)
-		if sheet.ID == 0 {
-			return resError(c, "sold_out", 409)
-		}
-
-		tx, err := db.Begin()
-		if err != nil {
-			return err
-		}
-
-		{
-			reservationID, err = client.Incr(reserveIDKey).Result()
-			if err != nil {
-				log.Println("failed to incr:", err)
-			}
-		}
-
-		now := time.Now().UTC()
-		{
-			client.HSet(reserveKey(event.ID, sheet.Rank), strconv.Itoa(int(sheet.Num)), now.Unix())
-		}
-
-		_, err = tx.ExecContext(ctx, "INSERT INTO reservations (id, event_id, sheet_id, user_id, reserved_at) VALUES (?, ?, ?, ?, ?)", reservationID, event.ID, sheet.ID, user.ID, now.Format("2006-01-02 15:04:05.000000"))
-		if err != nil {
-			tx.Rollback()
-			log.Println("re-try: rollback by", err)
-			continue
-		}
-		if err != nil {
-			tx.Rollback()
-			log.Println("re-try: rollback by", err)
-			continue
-		}
-		if err := tx.Commit(); err != nil {
-			tx.Rollback()
-			log.Println("re-try: rollback by", err)
-			continue
-		}
-
-		break
+	s, err := client.HGetAll(reserveKey(event.ID, params.Rank)).Result()
+	if err != nil {
+		return err
 	}
+	if len(s) == int(sheetMap[params.Rank].Num) {
+		return resError(c, "sold_out", 409)
+	}
+
+	sheet = RandSheet(params.Rank, s)
+	if sheet.ID == 0 {
+		return resError(c, "sold_out", 409)
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+
+	{
+		reservationID, err = client.Incr(reserveIDKey).Result()
+		if err != nil {
+			log.Println("failed to incr:", err)
+		}
+	}
+
+	now := time.Now().UTC()
+	{
+		client.HSet(reserveKey(event.ID, sheet.Rank), strconv.Itoa(int(sheet.Num)), now.Unix())
+	}
+
+	go func() {
+		_, err = tx.ExecContext(ctx, "INSERT INTO reservations (id, event_id, sheet_id, user_id, reserved_at) VALUES (?, ?, ?, ?, ?)", reservationID, event.ID, sheet.ID, user.ID, now.Format("2006-01-02 15:04:05.000000"))
+	}()
 	return c.JSON(202, echo.Map{
 		"id":         reservationID,
 		"sheet_rank": params.Rank,
