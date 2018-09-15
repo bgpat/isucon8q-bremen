@@ -21,7 +21,8 @@ func registerRoutes(e *echo.Echo) {
 }
 
 func getRoot(c echo.Context) error {
-	events, err := getEventsRoot()
+	ctx := c.Request().Context()
+	events, err := getEventsRoot(ctx)
 	if err != nil {
 		return err
 	}
@@ -36,6 +37,7 @@ func getRoot(c echo.Context) error {
 }
 
 func postActionsLogin(c echo.Context) error {
+	ctx := c.Request().Context()
 	var params struct {
 		LoginName string `json:"login_name"`
 		Password  string `json:"password"`
@@ -43,7 +45,7 @@ func postActionsLogin(c echo.Context) error {
 	c.Bind(&params)
 
 	user := new(User)
-	if err := db.QueryRow("SELECT * FROM users WHERE login_name = ?", params.LoginName).Scan(&user.ID, &user.LoginName, &user.Nickname, &user.PassHash); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT * FROM users WHERE login_name = ?", params.LoginName).Scan(&user.ID, &user.LoginName, &user.Nickname, &user.PassHash); err != nil {
 		if err == sql.ErrNoRows {
 			return resError(c, "authentication_failed", 401)
 		}
@@ -51,7 +53,7 @@ func postActionsLogin(c echo.Context) error {
 	}
 
 	var passHash string
-	if err := db.QueryRow("SELECT SHA2(?, 256)", params.Password).Scan(&passHash); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT SHA2(?, 256)", params.Password).Scan(&passHash); err != nil {
 		return err
 	}
 	if user.PassHash != passHash {

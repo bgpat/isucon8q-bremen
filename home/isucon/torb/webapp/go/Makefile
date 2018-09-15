@@ -7,11 +7,12 @@ clean:
 	rm -rf torb
 
 deps:
-	gb vendor restore
+	# gb vendor restore
+	dep ensure -vendor-only
 
 .PHONY: build
 build:
-	GOOS=linux GOPATH=`pwd`:`pwd`/vendor go build -v torb
+	GOOS=linux go build -v -o torb ./src/torb
 
 .PHONY: deploy
 deploy:
