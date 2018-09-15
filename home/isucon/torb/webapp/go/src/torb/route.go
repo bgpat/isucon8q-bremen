@@ -2,8 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"os"
-	"os/exec"
 	"strconv"
 
 	"github.com/labstack/echo"
@@ -36,18 +34,6 @@ func getRoot(c echo.Context) error {
 		"user":   c.Get("user"),
 		"origin": c.Scheme() + "://" + c.Request().Host,
 	})
-}
-
-func getInitialize(c echo.Context) error {
-	cmd := exec.Command("../../db/init.sh")
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	err := cmd.Run()
-	if err != nil {
-		return nil
-	}
-
-	return c.NoContent(204)
 }
 
 func postAPIUsers(c echo.Context) error {
