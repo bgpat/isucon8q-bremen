@@ -2,7 +2,7 @@
 
 set -ue
 
-mysqldumpslow -s t /var/log/mariadb/mariadb-slow.log | slackcat --filename "slow-$(hostname).txt"
+mysqldumpslow -s t /var/log/mariadb/mariadb-slow.log | head -100 | slackcat --filename "slow-$(hostname).txt"
 cp /var/log/mariadb/mariadb-slow.log /var/log/mariadb/mariadb-slow.log.old
 rm /var/log/mariadb/mariadb-slow.log
 systemctl restart mariadb
