@@ -39,3 +39,6 @@ CREATE TABLE IF NOT EXISTS administrators (
     pass_hash   VARCHAR(128) NOT NULL,
     UNIQUE KEY login_name_uniq (login_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+alter table reservations add index canceled_at_event_id_sheet_id_reserved_at(canceled_at, event_id , sheet_id, reserved_at);
+--alter table reservations add index event_id_sheet_id_reserved_at_idx(event_id, sheet_id, reserved_at);
