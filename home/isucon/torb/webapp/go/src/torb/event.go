@@ -19,7 +19,7 @@ type Event struct {
 	Sheets  map[string]*Sheets `json:"sheets,omitempty"`
 }
 
-func getEventsRoot(all bool) ([]*Event, error) {
+func getEventsRoot() ([]*Event, error) {
 	rows1, err := db.Query("SELECT id, title, price FROM events WHERE public_fg = 1 ORDER BY id ASC")
 	if err != nil {
 		return nil, err
@@ -64,42 +64,17 @@ func getEventsRoot(all bool) ([]*Event, error) {
 		}
 
 		event.Sheets = map[string]*Sheets{
-			"S": &Sheets{Total: 50, Price: 5000 + event.Price, Remains: memo[event.ID][0]},
-			"A": &Sheets{Total: 150, Price: 3000 + event.Price, Remains: memo[event.ID][1]},
-			"B": &Sheets{Total: 300, Price: 1000 + event.Price, Remains: memo[event.ID][2]},
-			"C": &Sheets{Total: 500, Price: 0 + event.Price, Remains: memo[event.ID][3]},
+			"S": &Sheets{Total: 50, Price: 5000 + event.Price, Remains: 50 - memo[event.ID][0]},
+			"A": &Sheets{Total: 150, Price: 3000 + event.Price, Remains: 150 - memo[event.ID][1]},
+			"B": &Sheets{Total: 300, Price: 1000 + event.Price, Remains: 300 - memo[event.ID][2]},
+			"C": &Sheets{Total: 500, Price: 0 + event.Price, Remains: 500 - memo[event.ID][3]},
 		}
 		event.Total = 1000
-		event.Remains = memo[event.ID][4]
+		event.Remains = 1000 - memo[event.ID][4]
 
 		events = append(events, &event)
 	}
 	return events, nil
-
-	/*
-		var events []*Event
-		for rows.Next() {
-			var event Event
-			if err := rows.Scan(&event.ID, &event.Title, &event.PublicFg, &event.ClosedFg, &event.Price); err != nil {
-				return nil, err
-			}
-			if !all && !event.PublicFg {
-				continue
-			}
-			events = append(events, &event)
-		}
-		for i, v := range events {
-			event, err := getEvent(v.ID, -1)
-			if err != nil {
-				return nil, err
-			}
-			for k := range event.Sheets {
-				event.Sheets[k].Detail = nil
-			}
-			events[i] = event
-		}
-		return events, nil
-	*/
 }
 
 func getEvents(all bool) ([]*Event, error) {
@@ -186,7 +161,7 @@ func getEvent(eventID, loginUserID int64) (*Event, error) {
 }
 
 func getAPIEvents(c echo.Context) error {
-	events, err := getEvents(true)
+	events, err := getEventsRoot()
 	if err != nil {
 		return err
 	}
