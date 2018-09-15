@@ -11,7 +11,6 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
@@ -19,25 +18,6 @@ import (
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/middleware"
 )
-
-type Sheets struct {
-	Total   int      `json:"total"`
-	Remains int      `json:"remains"`
-	Detail  []*Sheet `json:"detail,omitempty"`
-	Price   int64    `json:"price"`
-}
-
-type Sheet struct {
-	ID    int64  `json:"-"`
-	Rank  string `json:"-"`
-	Num   int64  `json:"num"`
-	Price int64  `json:"-"`
-
-	Mine           bool       `json:"mine,omitempty"`
-	Reserved       bool       `json:"reserved,omitempty"`
-	ReservedAt     *time.Time `json:"-"`
-	ReservedAtUnix int64      `json:"reserved_at,omitempty"`
-}
 
 func sanitizeEvent(e *Event) *Event {
 	sanitized := *e
