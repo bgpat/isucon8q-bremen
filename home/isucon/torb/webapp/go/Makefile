@@ -25,6 +25,6 @@ deploy:
 
 .PHONY: put
 put: build
-	scp $< root@isucon1:/home/isucon/torb/webapp/go/$(NAME)
-	scp $< root@isucon3:/home/isucon/torb/webapp/go/$(NAME)
-	scp $< root@isucon2:/home/isucon/torb/webapp/go/$(NAME)
+	scp torb root@isucon1:/home/isucon/torb/webapp/go/$(NAME)
+	scp torb root@isucon3:/home/isucon/torb/webapp/go/$(NAME)
+	scp torb root@isucon2:/home/isucon/torb/webapp/go/$(NAME)
