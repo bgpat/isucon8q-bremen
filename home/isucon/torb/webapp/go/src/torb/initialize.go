@@ -28,10 +28,11 @@ func getInitialize(c echo.Context) error {
 			rows.Scan(&r.ID, &r.EventID, &r.SheetID, &r.ReservedAt)
 			rank, num := Rank(r.SheetID)
 			client.Set(reserveKey(r.EventID, rank, num), r.ReservedAtUnix, 0)
-			if id > r.ID {
+			if id < r.ID {
 				id = r.ID
 			}
 		}
+		client.Set(reserveIDKey, id, 0)
 	}
 
 	return c.NoContent(204)
