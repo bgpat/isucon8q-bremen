@@ -19,6 +19,95 @@ type Event struct {
 	Sheets  map[string]*Sheets `json:"sheets,omitempty"`
 }
 
+func getEventsRoot(all bool) ([]*Event, error) {
+	tx, err := db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Commit()
+
+	rows1, err := tx.Query("SELECT id, title, price FROM events WHERE public_fg = 1 ORDER BY id ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows1.Close()
+
+	memo := make(map[int64]map[int]int)
+
+	for i, v := range [][]int{
+		[]int{0, 50},
+		[]int{50, 200},
+		[]int{200, 500},
+		[]int{500, 1000},
+	} {
+
+		rows, err := tx.Query("SELECT event_id, count(1) FROM reservations WHERE ? < sheet_id AND sheet_id <= ? AND canceled_at IS NULL GROUP BY event_id", v[0], v[1])
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var id int64
+			var count int
+			if err := rows.Scan(&id, &count); err != nil {
+				return nil, err
+			}
+			if memo[id] == nil {
+				memo[id] = make(map[int]int)
+			}
+			memo[id][i] = count
+			memo[id][4] += count
+		}
+	}
+
+	var events []*Event
+	for rows1.Next() {
+		var event Event
+
+		if err := rows1.Scan(&event.ID, &event.Title, &event.Price); err != nil {
+			return nil, err
+		}
+
+		event.Sheets = map[string]*Sheets{
+			"S": &Sheets{Total: 50, Price: 5000 + event.Price, Remains: memo[event.ID][0]},
+			"A": &Sheets{Total: 150, Price: 3000 + event.Price, Remains: memo[event.ID][1]},
+			"B": &Sheets{Total: 300, Price: 1000 + event.Price, Remains: memo[event.ID][2]},
+			"C": &Sheets{Total: 500, Price: 0 + event.Price, Remains: memo[event.ID][3]},
+		}
+		event.Total = 1000
+		event.Remains = memo[event.ID][4]
+
+		events = append(events, &event)
+	}
+	return events, nil
+
+	/*
+		var events []*Event
+		for rows.Next() {
+			var event Event
+			if err := rows.Scan(&event.ID, &event.Title, &event.PublicFg, &event.ClosedFg, &event.Price); err != nil {
+				return nil, err
+			}
+			if !all && !event.PublicFg {
+				continue
+			}
+			events = append(events, &event)
+		}
+		for i, v := range events {
+			event, err := getEvent(v.ID, -1)
+			if err != nil {
+				return nil, err
+			}
+			for k := range event.Sheets {
+				event.Sheets[k].Detail = nil
+			}
+			events[i] = event
+		}
+		return events, nil
+	*/
+}
+
 func getEvents(all bool) ([]*Event, error) {
 	tx, err := db.Begin()
 	if err != nil {
