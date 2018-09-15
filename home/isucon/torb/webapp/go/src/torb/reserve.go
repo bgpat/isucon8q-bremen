@@ -26,6 +26,7 @@ type Reservation struct {
 }
 
 func postReserve(c echo.Context) error {
+	ctx := c.Request().Context()
 	eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resError(c, "not_found", 404)
@@ -40,7 +41,7 @@ func postReserve(c echo.Context) error {
 		return err
 	}
 
-	event, err := getEvent(eventID, user.ID)
+	event, err := getEvent(ctx, eventID, user.ID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return resError(c, "invalid_event", 404)
@@ -97,6 +98,7 @@ func postReserve(c echo.Context) error {
 }
 
 func deleteReservation(c echo.Context) error {
+	ctx := c.Request().Context()
 	eventID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return resError(c, "not_found", 404)
@@ -109,7 +111,7 @@ func deleteReservation(c echo.Context) error {
 		return err
 	}
 
-	event, err := getEvent(eventID, user.ID)
+	event, err := getEvent(ctx, eventID, user.ID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return resError(c, "invalid_event", 404)
