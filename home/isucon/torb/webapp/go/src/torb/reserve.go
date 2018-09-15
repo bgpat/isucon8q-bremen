@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -23,6 +24,12 @@ type Reservation struct {
 	Price          int64  `json:"price,omitempty"`
 	ReservedAtUnix int64  `json:"reserved_at,omitempty"`
 	CanceledAtUnix int64  `json:"canceled_at,omitempty"`
+}
+
+var reserveIDKey = "rid"
+
+func reserveKey(eventID int64, rank string, num int64) string {
+	return fmt.Sprintf("r_%v_%v_%v", eventID, rank, num)
 }
 
 func postReserve(c echo.Context) error {
@@ -70,13 +77,24 @@ func postReserve(c echo.Context) error {
 			return err
 		}
 
-		res, err := tx.ExecContext(ctx, "INSERT INTO reservations (event_id, sheet_id, user_id, reserved_at) VALUES (?, ?, ?, ?)", event.ID, sheet.ID, user.ID, time.Now().UTC().Format("2006-01-02 15:04:05.000000"))
+		{
+			reservationID, err = client.Incr(reserveIDKey).Result()
+			if err != nil {
+				log.Println("failed to incr:", err)
+			}
+		}
+
+		now := time.Now().UTC()
+		{
+			client.Set(reserveKey(event.ID, sheet.Rank, sheet.Num), now.Unix(), 0)
+		}
+
+		_, err = tx.ExecContext(ctx, "INSERT INTO reservations (id, event_id, sheet_id, user_id, reserved_at) VALUES (?, ?, ?, ?, ?)", reservationID, event.ID, sheet.ID, user.ID, now.Format("2006-01-02 15:04:05.000000"))
 		if err != nil {
 			tx.Rollback()
 			log.Println("re-try: rollback by", err)
 			continue
 		}
-		reservationID, err = res.LastInsertId()
 		if err != nil {
 			tx.Rollback()
 			log.Println("re-try: rollback by", err)
@@ -161,4 +179,17 @@ func deleteReservation(c echo.Context) error {
 	}
 
 	return c.NoContent(204)
+}
+
+func Rank(sheetId int64) (string, int64) {
+	if sheetId <= 50 {
+		return "S", sheetId
+	}
+	if sheetId <= 200 {
+		return "A", sheetId - 50
+	}
+	if sheetId <= 500 {
+		return "B", sheetId - 200
+	}
+	return "C", sheetId - 500
 }

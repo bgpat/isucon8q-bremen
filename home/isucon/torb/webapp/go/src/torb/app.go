@@ -95,8 +95,7 @@ func main() {
 	client = redis.NewClient(&redis.Options{
 		Addr: "localhost:6379",
 	})
-	pong, err := client.Ping().Result()
-	if err != nil {
+	if _, err := client.Ping().Result(); err != nil {
 		log.Fatal(err)
 	}
 
