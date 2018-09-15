@@ -19,6 +19,7 @@ func getInitialize(c echo.Context) error {
 	}
 
 	{
+		client.FlushDB()
 		var id int64
 		rows, err := db.Query("SELECT id, event_id, sheet_id, reserved_at FROM reservations WHERE canceled_at IS NULL")
 		if err != nil {

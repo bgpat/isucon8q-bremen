@@ -75,11 +75,14 @@ func postReserve(c echo.Context) error {
 		if err != nil {
 			return err
 		}
-		if sheetMap[params.Rank].Num-int64(len(s)) == 0 {
+		if len(s) == int(sheetMap[params.Rank].Num) {
 			return resError(c, "sold_out", 409)
 		}
 
 		sheet = RandSheet(params.Rank, s)
+		if sheet.ID == 0 {
+			return resError(c, "sold_out", 409)
+		}
 
 		tx, err := db.Begin()
 		if err != nil {
@@ -223,18 +226,18 @@ func RandSheet(rank string, s map[string]string) Sheet {
 	r = sort.IntSlice(r)
 
 	j := 0
-	for i := int64(1); i <= sheetMap[rank].Num; i++ {
+	for i := int64(1); j < len(r) && i <= sheetMap[rank].Num; i++ {
 		if i == int64(r[j]) {
 			j++
-			if j == len(r) {
-				break
-			}
 		} else {
 			q = append(q, i)
 		}
 	}
 	sheet := Sheet{}
 	sheet.Rank = rank
+	if len(q) == 0 {
+		return Sheet{}
+	}
 	sheet.Num = q[rand.Intn(len(q))]
 	sheet.ID = sheetMap[rank].Num + sheet.Num
 	return sheet
