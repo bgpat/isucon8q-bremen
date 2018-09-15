@@ -183,6 +183,9 @@ func deleteReservation(c echo.Context) error {
 		return err
 	}
 
+	if err := client.Del(reserveKey(event.ID, rank, sheet.Num)).Err(); err != nil {
+		return err
+	}
 	return c.NoContent(204)
 }
 
