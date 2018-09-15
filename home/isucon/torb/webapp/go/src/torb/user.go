@@ -56,6 +56,7 @@ func loginRequired(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 func postAPIUsers(c echo.Context) error {
+	ctx := c.Request().Context()
 	var params struct {
 		Nickname  string `json:"nickname"`
 		LoginName string `json:"login_name"`
@@ -69,7 +70,7 @@ func postAPIUsers(c echo.Context) error {
 	}
 
 	var user User
-	if err := tx.QueryRow("SELECT * FROM users WHERE login_name = ?", params.LoginName).Scan(&user.ID, &user.LoginName, &user.Nickname, &user.PassHash); err != sql.ErrNoRows {
+	if err := tx.QueryRowContext(ctx, "SELECT * FROM users WHERE login_name = ?", params.LoginName).Scan(&user.ID, &user.LoginName, &user.Nickname, &user.PassHash); err != sql.ErrNoRows {
 		tx.Rollback()
 		if err == nil {
 			return resError(c, "duplicated", 409)
@@ -77,7 +78,7 @@ func postAPIUsers(c echo.Context) error {
 		return err
 	}
 
-	res, err := tx.Exec("INSERT INTO users (login_name, pass_hash, nickname) VALUES (?, SHA2(?, 256), ?)", params.LoginName, params.Password, params.Nickname)
+	res, err := tx.ExecContext(ctx, "INSERT INTO users (login_name, pass_hash, nickname) VALUES (?, SHA2(?, 256), ?)", params.LoginName, params.Password, params.Nickname)
 	if err != nil {
 		tx.Rollback()
 		return resError(c, "", 0)
