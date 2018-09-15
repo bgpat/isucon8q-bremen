@@ -21,7 +21,8 @@ func registerRoutes(e *echo.Echo) {
 }
 
 func getRoot(c echo.Context) error {
-	events, err := getEventsRoot()
+	ctx := c.Request().Context()
+	events, err := getEventsRoot(ctx)
 	if err != nil {
 		return err
 	}

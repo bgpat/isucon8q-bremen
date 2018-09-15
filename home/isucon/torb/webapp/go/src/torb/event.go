@@ -20,8 +20,8 @@ type Event struct {
 	Sheets  map[string]*Sheets `json:"sheets,omitempty"`
 }
 
-func getEventsRoot() ([]*Event, error) {
-	rows1, err := db.Query("SELECT id, title, price FROM events WHERE public_fg = 1 ORDER BY id ASC")
+func getEventsRoot(ctx context.Context) ([]*Event, error) {
+	rows1, err := db.QueryContext(ctx, "SELECT id, title, price FROM events WHERE public_fg = 1 ORDER BY id ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +36,7 @@ func getEventsRoot() ([]*Event, error) {
 		[]int{500, 1000},
 	} {
 
-		rows, err := db.Query("SELECT event_id, count(1) FROM reservations WHERE ? < sheet_id AND sheet_id <= ? AND canceled_at IS NULL GROUP BY event_id", v[0], v[1])
+		rows, err := db.QueryContext(ctx, "SELECT event_id, count(1) FROM reservations WHERE ? < sheet_id AND sheet_id <= ? AND canceled_at IS NULL GROUP BY event_id", v[0], v[1])
 		if err != nil {
 			return nil, err
 		}
@@ -85,7 +85,7 @@ func getEvents(ctx context.Context, all bool) ([]*Event, error) {
 	}
 	defer tx.Commit()
 
-	rows, err := tx.Query("SELECT * FROM events ORDER BY id ASC")
+	rows, err := tx.QueryContext(ctx, "SELECT * FROM events ORDER BY id ASC")
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,8 @@ func getEvent(ctx context.Context, eventID, loginUserID int64) (*Event, error) {
 }
 
 func getAPIEvents(c echo.Context) error {
-	events, err := getEventsRoot()
+	ctx := c.Request().Context()
+	events, err := getEventsRoot(ctx)
 	if err != nil {
 		return err
 	}
