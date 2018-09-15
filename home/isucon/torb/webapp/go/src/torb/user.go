@@ -165,7 +165,8 @@ func getAPIUser(c echo.Context) error {
 		if err := rows.Scan(&eventID); err != nil {
 			return err
 		}
-		event, err := getEvent(eventID, -1)
+		//event, err := getEvent(eventID, -1)
+		event, err := getEventLightSheets(eventID, -1)
 		if err != nil {
 			return err
 		}
