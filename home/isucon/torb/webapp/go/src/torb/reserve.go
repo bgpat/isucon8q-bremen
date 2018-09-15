@@ -3,10 +3,13 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"go.opencensus.io/trace"
 	"log"
+	"math/rand"
+	"sort"
 	"strconv"
 	"time"
+
+	"go.opencensus.io/trace"
 
 	"github.com/labstack/echo"
 )
@@ -76,12 +79,7 @@ func postReserve(c echo.Context) error {
 			return resError(c, "sold_out", 409)
 		}
 
-		if err := db.QueryRowContext(ctx, "SELECT * FROM sheets WHERE id NOT IN (SELECT sheet_id FROM reservations WHERE event_id = ? AND canceled_at IS NULL FOR UPDATE) AND `rank` = ? ORDER BY RAND() LIMIT 1", event.ID, params.Rank).Scan(&sheet.ID, &sheet.Rank, &sheet.Num, &sheet.Price); err != nil {
-			if err == sql.ErrNoRows {
-				return resError(c, "sold_out", 409)
-			}
-			return err
-		}
+		sheet = RandSheet(params.Rank, s)
 
 		tx, err := db.Begin()
 		if err != nil {
@@ -208,4 +206,36 @@ func Rank(sheetId int64) (string, int64) {
 		return "B", sheetId - 200
 	}
 	return "C", sheetId - 500
+}
+
+/*
+   rank : SABCのどれか
+   s : keyがすでに使われているNumをstringにしたもの
+*/
+func RandSheet(rank string, s map[string]string) Sheet {
+	r := make([]int, 0, sheetMap[rank].Num)
+	q := make([]int64, 0, sheetMap[rank].Num)
+	for k, _ := range s {
+		used, _ := strconv.Atoi(k)
+		r = append(r, used)
+	}
+
+	r = sort.IntSlice(r)
+
+	j := 0
+	for i := int64(1); i <= sheetMap[rank].Num; i++ {
+		if i == int64(r[j]) {
+			j++
+			if j == len(r) {
+				break
+			}
+		} else {
+			q = append(q, i)
+		}
+	}
+	sheet := Sheet{}
+	sheet.Rank = rank
+	sheet.Num = q[rand.Intn(len(q))]
+	sheet.ID = sheetMap[rank].Num + sheet.Num
+	return sheet
 }
