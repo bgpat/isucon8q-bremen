@@ -27,6 +27,35 @@ func getEventsRoot(ctx context.Context) ([]*Event, error) {
 	}
 	defer rows1.Close()
 
+	memo := *CreateRemains()
+
+	var events []*Event
+	for rows1.Next() {
+		var event Event
+
+		if err := rows1.Scan(&event.ID, &event.Title, &event.Price); err != nil {
+			return nil, err
+		}
+
+		event.Sheets = CreateSheets(event, memo)
+		event.Total = 1000
+		event.Remains = 1000 - memo[event.ID][4]
+
+		events = append(events, &event)
+	}
+	return events, nil
+}
+
+func CreateSheets(event Event, memo map[int64]map[int]int) map[string]*Sheets {
+	return map[string]*Sheets{
+		"S": &Sheets{Total: 50, Price: 5000 + event.Price, Remains: 50 - memo[event.ID][0]},
+		"A": &Sheets{Total: 150, Price: 3000 + event.Price, Remains: 150 - memo[event.ID][1]},
+		"B": &Sheets{Total: 300, Price: 1000 + event.Price, Remains: 300 - memo[event.ID][2]},
+		"C": &Sheets{Total: 500, Price: 0 + event.Price, Remains: 500 - memo[event.ID][3]},
+	}
+}
+
+func CreateRemains() *map[int64]map[int]int {
 	memo := make(map[int64]map[int]int)
 
 	for i, v := range [][]int{
@@ -38,7 +67,7 @@ func getEventsRoot(ctx context.Context) ([]*Event, error) {
 
 		rows, err := db.QueryContext(ctx, "SELECT event_id, count(1) FROM reservations WHERE ? < sheet_id AND sheet_id <= ? AND canceled_at IS NULL GROUP BY event_id", v[0], v[1])
 		if err != nil {
-			return nil, err
+			return nil
 		}
 		defer rows.Close()
 
@@ -46,7 +75,7 @@ func getEventsRoot(ctx context.Context) ([]*Event, error) {
 			var id int64
 			var count int
 			if err := rows.Scan(&id, &count); err != nil {
-				return nil, err
+				return nil
 			}
 			if memo[id] == nil {
 				memo[id] = make(map[int]int)
@@ -55,27 +84,7 @@ func getEventsRoot(ctx context.Context) ([]*Event, error) {
 			memo[id][4] += count
 		}
 	}
-
-	var events []*Event
-	for rows1.Next() {
-		var event Event
-
-		if err := rows1.Scan(&event.ID, &event.Title, &event.Price); err != nil {
-			return nil, err
-		}
-
-		event.Sheets = map[string]*Sheets{
-			"S": &Sheets{Total: 50, Price: 5000 + event.Price, Remains: 50 - memo[event.ID][0]},
-			"A": &Sheets{Total: 150, Price: 3000 + event.Price, Remains: 150 - memo[event.ID][1]},
-			"B": &Sheets{Total: 300, Price: 1000 + event.Price, Remains: 300 - memo[event.ID][2]},
-			"C": &Sheets{Total: 500, Price: 0 + event.Price, Remains: 500 - memo[event.ID][3]},
-		}
-		event.Total = 1000
-		event.Remains = 1000 - memo[event.ID][4]
-
-		events = append(events, &event)
-	}
-	return events, nil
+	return &memo
 }
 
 func getEvents(ctx context.Context, all bool) ([]*Event, error) {
@@ -113,6 +122,51 @@ func getEvents(ctx context.Context, all bool) ([]*Event, error) {
 		events[i] = event
 	}
 	return events, nil
+}
+
+func getEventLightSheets(ctx context.Context, eventID, loginUserID int64) (*Event, error) {
+	var event Event
+	if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&event.ID, &event.Title, &event.PublicFg, &event.ClosedFg, &event.Price); err != nil {
+		return nil, err
+	}
+	memo := *CreateRemains()
+	event.Sheets = CreateSheets(event, memo)
+	event.Total = 1000
+	event.Remains = 1000 - memo[event.ID][4]
+	/*
+		rows, err := db.Query("SELECT * FROM sheets ORDER BY `rank`, num")
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var sheet Sheet
+			if err := rows.Scan(&sheet.ID, &sheet.Rank, &sheet.Num, &sheet.Price); err != nil {
+				return nil, err
+			}
+			event.Sheets[sheet.Rank].Price = event.Price + sheet.Price
+			event.Total++
+			event.Sheets[sheet.Rank].Total++
+
+			var reservation Reservation
+			err := db.QueryRow("SELECT * FROM reservations WHERE event_id = ? AND sheet_id = ? AND canceled_at IS NULL GROUP BY event_id, sheet_id HAVING reserved_at = MIN(reserved_at)", event.ID, sheet.ID).Scan(&reservation.ID, &reservation.EventID, &reservation.SheetID, &reservation.UserID, &reservation.ReservedAt, &reservation.CanceledAt)
+			if err == nil {
+				sheet.Mine = reservation.UserID == loginUserID
+				sheet.Reserved = true
+				sheet.ReservedAtUnix = reservation.ReservedAt.Unix()
+			} else if err == sql.ErrNoRows {
+				event.Remains++
+				event.Sheets[sheet.Rank].Remains++
+			} else {
+				return nil, err
+			}
+
+			event.Sheets[sheet.Rank].Detail = append(event.Sheets[sheet.Rank].Detail, &sheet)
+		}
+	*/
+
+	return &event, nil
 }
 
 func getEvent(ctx context.Context, eventID, loginUserID int64) (*Event, error) {
