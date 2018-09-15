@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"net/http"
 	"os"
 	"sort"
 	"strings"
@@ -17,6 +18,9 @@ import (
 	"github.com/labstack/echo"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/middleware"
+	"go.opencensus.io/exporter/jaeger"
+	"go.opencensus.io/plugin/ochttp"
+	"go.opencensus.io/trace"
 )
 
 func sanitizeEvent(e *Event) *Event {
@@ -53,13 +57,24 @@ func (r *Renderer) Render(w io.Writer, name string, data interface{}, c echo.Con
 var db *sql.DB
 
 func main() {
+	exporter, err := jaeger.NewExporter(jaeger.Options{
+		Endpoint: "http://isucon-monitor.401.jp:14268",
+		Process: jaeger.Process{
+			ServiceName: "torb",
+		},
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
+	trace.RegisterExporter(exporter)
+	trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
+
 	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4",
 		os.Getenv("DB_USER"), os.Getenv("DB_PASS"),
 		os.Getenv("DB_HOST"), os.Getenv("DB_PORT"),
 		os.Getenv("DB_DATABASE"),
 	)
 
-	var err error
 	db, err = sql.Open("mysql", dsn)
 	if err != nil {
 		log.Fatal(err)
@@ -75,6 +90,9 @@ func main() {
 	e.Renderer = &Renderer{
 		templates: template.Must(template.New("").Delims("[[", "]]").Funcs(funcs).ParseGlob("views/*.tmpl")),
 	}
+	e.Use(echo.WrapMiddleware(func(h http.Handler) http.Handler {
+		return &ochttp.Handler{Handler: h}
+	}))
 	e.Use(session.Middleware(sessions.NewCookieStore([]byte("secret"))))
 	e.Use(middleware.LoggerWithConfig(middleware.LoggerConfig{Output: os.Stderr}))
 	e.Static("/", "public")
