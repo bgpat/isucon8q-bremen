@@ -27,7 +27,7 @@ func getEventsRoot(ctx context.Context) ([]*Event, error) {
 	}
 	defer rows1.Close()
 
-	memo := *CreateRemains()
+	memo := *CreateRemains(ctx)
 
 	var events []*Event
 	for rows1.Next() {
@@ -55,7 +55,7 @@ func CreateSheets(event Event, memo map[int64]map[int]int) map[string]*Sheets {
 	}
 }
 
-func CreateRemains() *map[int64]map[int]int {
+func CreateRemains(ctx context.Context) *map[int64]map[int]int {
 	memo := make(map[int64]map[int]int)
 
 	for i, v := range [][]int{
@@ -129,7 +129,7 @@ func getEventLightSheets(ctx context.Context, eventID, loginUserID int64) (*Even
 	if err := db.QueryRow("SELECT * FROM events WHERE id = ?", eventID).Scan(&event.ID, &event.Title, &event.PublicFg, &event.ClosedFg, &event.Price); err != nil {
 		return nil, err
 	}
-	memo := *CreateRemains()
+	memo := *CreateRemains(ctx)
 	event.Sheets = CreateSheets(event, memo)
 	event.Total = 1000
 	event.Remains = 1000 - memo[event.ID][4]
